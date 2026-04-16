@@ -90,7 +90,7 @@ def draw_sparkline(surf, data, rect, col, lo, hi, label, font):
     n = len(data)
     for i, val in enumerate(data):
         px = x + int(i / max(n - 1, 1) * w)
-        t  = (val - lo) / max(hi - lo, 1e-9)
+        t = (val - lo) / max(hi - lo, 1e-9)
         py = y + h - int(np.clip(t, 0, 1) * h)
         pts.append((px, py))
     if len(pts) > 1:
@@ -101,32 +101,32 @@ def main():
     pygame.init()
     screen = pygame.display.set_mode((W, H))
     pygame.display.set_caption("Inverted Pendulum")
-    clock  = pygame.time.Clock()
+    clock = pygame.time.Clock()
     font_lg = pygame.font.SysFont("consolas", 22, bold=True)
     font_md = pygame.font.SysFont("consolas", 16)
     font_sm = pygame.font.SysFont("consolas", 12)
 
     pend = Pendulum(theta0=0.2)
-    ai   = ActiveInferenceController(dt=DT)
+    ai = ActiveInferenceController(dt=DT)
     ai.reset(theta0=0.2)
 
-    MODES    = ["manual", "ai"]
+    MODES = ["manual", "ai"]
     mode_idx = 0
-    mode     = MODES[mode_idx]
+    mode = MODES[mode_idx]
 
-    step   = 0
+    step = 0
     paused = False
 
     override_active = False
 
-    HIST_LEN    = 200
-    hist_theta  = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
+    HIST_LEN = 200
+    hist_theta = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
     hist_torque = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
     hist_energy = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
 
     hist_free_energy = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
-    hist_pred_err    = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
-    hist_belief_err  = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
+    hist_pred_err = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
+    hist_belief_err = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
 
     while True:
         for ev in pygame.event.get():
@@ -192,12 +192,12 @@ def main():
             hist_belief_err.append(abs(diag["belief_angle"] - pend.theta))
             step += 1
 
-        pivot    = (PIVOT_X, PIVOT_Y)
-        tip_x    = PIVOT_X + int(ARM_PX * np.sin(pend.theta))
-        tip_y    = PIVOT_Y - int(ARM_PX * np.cos(pend.theta))
-        tip      = (tip_x, tip_y)
+        pivot = (PIVOT_X, PIVOT_Y)
+        tip_x = PIVOT_X + int(ARM_PX * np.sin(pend.theta))
+        tip_y = PIVOT_Y - int(ARM_PX * np.cos(pend.theta))
+        tip = (tip_x, tip_y)
         ang_frac = min(abs(pend.theta) / (np.pi / 2), 1.0)
-        arm_col  = lerp_color(TEAL, PINK, ang_frac)
+        arm_col = lerp_color(TEAL, PINK, ang_frac)
 
         screen.fill(BG)
         draw_grid(screen)
@@ -230,13 +230,9 @@ def main():
             else:
                 arrow_col = ORANGE
             arrow_dir = -1 if torque < 0 else 1
-            arrow_x   = PIVOT_X + arrow_dir * 40
+            arrow_x = PIVOT_X + arrow_dir * 40
             pygame.draw.line(screen, arrow_col, (PIVOT_X, PIVOT_Y), (arrow_x, PIVOT_Y), 4)
-            pygame.draw.polygon(screen, arrow_col, [
-                (arrow_x + arrow_dir * 8, PIVOT_Y),
-                (arrow_x, PIVOT_Y - 6),
-                (arrow_x, PIVOT_Y + 6),
-            ])
+            pygame.draw.polygon(screen, arrow_col, [(arrow_x + arrow_dir * 8, PIVOT_Y), (arrow_x, PIVOT_Y - 6), (arrow_x, PIVOT_Y + 6)])
 
         lh_base = 270 if mode != "ai" else 345
         LX, LY, LW, LH = 20, 20, 230, lh_base
@@ -245,33 +241,30 @@ def main():
         pygame.draw.line(screen, TEAL, (LX + 15, LY + 45), (LX + LW - 15, LY + 45), 2)
 
         mode_labels = {"manual": "MANUAL DRIVE", "ai": "ACTIVE INFERENCE"}
-        mode_cols   = {"manual": ORANGE, "ai": CYAN}
-        mode_label  = mode_labels[mode]
-        mode_col    = mode_cols[mode]
+        mode_cols = {"manual": ORANGE, "ai": CYAN}
+        mode_label = mode_labels[mode]
+        mode_col = mode_cols[mode]
 
         if mode == "ai" and override_active:
             badge_text = "[ MANUAL OVERRIDE ]"
-            badge_col  = ORANGE
+            badge_col = ORANGE
         else:
             badge_text = f"[ {mode_label} ]"
-            badge_col  = mode_col
+            badge_col = mode_col
 
         badge = font_sm.render(badge_text, True, badge_col)
         screen.blit(badge, (LX + LW//2 - badge.get_width()//2, LY + 50))
 
         stats = [
-            ("ANGLE (θ)",  f"{np.degrees(pend.theta):+7.1f}°",  arm_col),
-            ("VELOCITY",   f"{pend.thetadot:+7.2f} r/s",        DIM),
-            ("TORQUE (τ)", f"{torque:+7.2f} Nm",                 mode_col if not override_active else ORANGE),
-            ("ENERGY",     f"{pend.get_energy():+7.2f} J",       PINK),
-            ("SYS CLOCK",  f"{step:7d}",                         WHITE),
+            ("ANGLE (θ)", f"{np.degrees(pend.theta):+7.1f}°", arm_col),
+            ("VELOCITY", f"{pend.thetadot:+7.2f} r/s", DIM),
+            ("TORQUE (τ)", f"{torque:+7.2f} Nm", mode_col if not override_active else ORANGE),
+            ("ENERGY", f"{pend.get_energy():+7.2f} J", PINK),
+            ("SYS CLOCK", f"{step:7d}", WHITE),
         ]
         if mode == "ai":
             d = ai.get_diagnostics()
-            stats += [
-                ("FREE ENRGY", f"{d['free_energy']:+7.2f}",      CYAN),
-                ("Πₛ (sens)",  f"{d['pi_s'][0]:7.1f}",           CYAN),
-            ]
+            stats += [("FREE ENRGY", f"{d['free_energy']:+7.2f}", CYAN), ("Πₛ (sens)",  f"{d['pi_s'][0]:7.1f}", CYAN)]
 
         for i, (lbl, val, col) in enumerate(stats):
             yo = LY + 75 + i * 36
@@ -283,36 +276,20 @@ def main():
         if mode == "ai":
             rh_h = 370
             draw_hud_panel(screen, (RX - 10, RY, 260, rh_h), PANEL_BG)
-            draw_sparkline(screen, list(hist_theta),
-                        (RX, RY + 15, 240, 60),
-                        TEAL, -np.pi, np.pi, "Angle theta (rad)", font_sm)
-            draw_sparkline(screen, list(hist_torque),
-                        (RX, RY + 90, 240, 60),
-                        CYAN, -MAX_TORQUE, MAX_TORQUE, "Torque tau (Nm)", font_sm)
+            draw_sparkline(screen, list(hist_theta), (RX, RY + 15, 240, 60), TEAL, -np.pi, np.pi, "Angle theta (rad)", font_sm)
+            draw_sparkline(screen, list(hist_torque), (RX, RY + 90, 240, 60), CYAN, -MAX_TORQUE, MAX_TORQUE, "Torque tau (Nm)", font_sm)
             max_fe = max(max(hist_free_energy), 1.0)
-            draw_sparkline(screen, list(hist_free_energy),
-                        (RX, RY + 165, 240, 60),
-                        PINK, 0, max_fe, "Free Energy F", font_sm)
+            draw_sparkline(screen, list(hist_free_energy), (RX, RY + 165, 240, 60), PINK, 0, max_fe, "Free Energy F", font_sm)
             max_pe = max(max(hist_pred_err), 0.1)
-            draw_sparkline(screen, list(hist_pred_err),
-                        (RX, RY + 240, 240, 60),
-                        ORANGE, 0, max_pe, "Prediction Error |eps_s|", font_sm)
+            draw_sparkline(screen, list(hist_pred_err), (RX, RY + 240, 240, 60), ORANGE, 0, max_pe, "Prediction Error |eps_s|", font_sm)
             max_be = max(max(hist_belief_err), 0.1)
-            draw_sparkline(screen, list(hist_belief_err),
-                        (RX, RY + 315, 240, 40),
-                        VIOLET, 0, max_be, "Belief Error |mu-theta|", font_sm)
+            draw_sparkline(screen, list(hist_belief_err), (RX, RY + 315, 240, 40),VIOLET, 0, max_be, "Belief Error |mu-theta|", font_sm)
         else:
             draw_hud_panel(screen, (RX - 10, RY, 260, 280), PANEL_BG)
-            draw_sparkline(screen, list(hist_theta),
-                        (RX, RY + 15, 240, 70),
-                        TEAL, -np.pi, np.pi, "Angle theta (rad)", font_sm)
-            draw_sparkline(screen, list(hist_torque),
-                        (RX, RY + 100, 240, 70),
-                        mode_col, -MAX_TORQUE, MAX_TORQUE, "Torque tau (Nm)", font_sm)
+            draw_sparkline(screen, list(hist_theta), (RX, RY + 15, 240, 70), TEAL, -np.pi, np.pi, "Angle theta (rad)", font_sm)
+            draw_sparkline(screen, list(hist_torque), (RX, RY + 100, 240, 70), mode_col, -MAX_TORQUE, MAX_TORQUE, "Torque tau (Nm)", font_sm)
             max_e = max(hist_energy) if max(hist_energy) > 20 else 20
-            draw_sparkline(screen, list(hist_energy),
-                        (RX, RY + 185, 240, 70),
-                        PINK, -15, max_e, "Total Energy (J)", font_sm)
+            draw_sparkline(screen, list(hist_energy), (RX, RY + 185, 240, 70), PINK, -15, max_e, "Total Energy (J)", font_sm)
 
         BY = H - 50
         draw_hud_panel(screen, (0, BY, W, 50), PANEL_BG, radius=0)
@@ -327,8 +304,7 @@ def main():
             ov = pygame.Surface((W, H), pygame.SRCALPHA)
             ov.fill((0, 0, 0, 150))
             screen.blit(ov, (0, 0))
-            screen.blit(font_lg.render("SYSTEM PAUSED", True, TEAL),
-                        (W//2 - 100, H//2 - 100))
+            screen.blit(font_lg.render("SYSTEM PAUSED", True, TEAL), (W//2 - 100, H//2 - 100))
 
         pygame.display.flip()
         clock.tick(FPS)

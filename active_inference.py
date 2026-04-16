@@ -18,7 +18,7 @@ class ActiveInferenceController:
         self._sub_dt = dt / n_belief_substeps
         self.eta = np.array([0.0, 0.0])   # upright & still
         self.mu = np.array([0.0, 0.0])
-	self._torque = 0.0
+        self._torque = 0.0
         self._eps_s = np.zeros(2)
         self._eps_p = np.zeros(2)
         self._eps_m = np.zeros(2)  # kept for HUD compatibility
