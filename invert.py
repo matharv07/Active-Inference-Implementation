@@ -3,6 +3,7 @@ import numpy as np
 import sys
 from collections import deque
 from active_inference import ActiveInferenceController
+
 # --- Configuration & Window ---
 W, H   = 1000, 700
 FPS    = 60
@@ -45,9 +46,7 @@ class Pendulum:
 
     def step(self, torque):
         torque = np.clip(torque, -MAX_TORQUE, MAX_TORQUE)
-        alpha  = (G / L) * np.sin(self.theta) \
-               + torque / (M * L * L) \
-               - DAMPING * self.thetadot
+        alpha  = (G / L)*np.sin(self.theta) + torque/(M*L**2) - DAMPING*self.thetadot
         self.thetadot += alpha * DT
         self.theta    += self.thetadot * DT
         self.theta     = (self.theta + np.pi) % (2 * np.pi) - np.pi
@@ -57,9 +56,6 @@ class Pendulum:
         pe = M * G * L * np.cos(self.theta)
         return ke + pe
 
-# =========================================================================
-#  Drawing Utilities
-# =========================================================================
 def glow_circle(surf, col, center, r, layers=4):
     for i in range(layers, 0, -1):
         alpha = int(60 * (1 - i / (layers + 1)))
@@ -101,9 +97,6 @@ def draw_sparkline(surf, data, rect, col, lo, hi, label, font):
         pygame.draw.lines(surf, col, False, pts, 2)
     surf.blit(font.render(label, True, WHITE), (x + 6, y + 4))
 
-# =========================================================================
-#  Main Loop
-# =========================================================================
 def main():
     pygame.init()
     screen = pygame.display.set_mode((W, H))
@@ -117,7 +110,6 @@ def main():
     ai   = ActiveInferenceController(dt=DT)
     ai.reset(theta0=0.2)
 
-    # Modes: "manual" | "ai"
     MODES    = ["manual", "ai"]
     mode_idx = 0
     mode     = MODES[mode_idx]
@@ -125,7 +117,6 @@ def main():
     step   = 0
     paused = False
 
-    # Tracks whether manual override is actively happening this frame
     override_active = False
 
     HIST_LEN    = 200
@@ -133,13 +124,11 @@ def main():
     hist_torque = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
     hist_energy = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
 
-    # AI-specific history
     hist_free_energy = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
     hist_pred_err    = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
     hist_belief_err  = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
 
     while True:
-        # ── Events ────────────────────────────────────────────────────────
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
                 pygame.quit(); sys.exit()
@@ -153,19 +142,17 @@ def main():
                     pend = Pendulum(theta0=t0)
                     ai.reset(theta0=t0)
                     for h in [hist_theta, hist_torque, hist_energy,
-                              hist_free_energy, hist_pred_err, hist_belief_err]:
+                            hist_free_energy, hist_pred_err, hist_belief_err]:
                         h.clear(); h.extend([0.0] * HIST_LEN)
                     step = 0
                 if ev.key == pygame.K_TAB:
                     mode_idx = (mode_idx + 1) % len(MODES)
                     mode = MODES[mode_idx]
-                # Precision adjustment (AI mode)
                 if ev.key == pygame.K_LEFTBRACKET:
                     ai.pi_s = np.clip(ai.pi_s - 2.0, 1.0, 50.0)
                 if ev.key == pygame.K_RIGHTBRACKET:
                     ai.pi_s = np.clip(ai.pi_s + 2.0, 1.0, 50.0)
 
-        # ── Torque ────────────────────────────────────────────────────────
         torque          = 0.0
         override_active = False
 
@@ -179,7 +166,6 @@ def main():
                     torque = MAX_TORQUE
 
             elif mode == "ai":
-                # Check for manual override first
                 manual_torque = 0.0
                 if keys[pygame.K_LEFT]:
                     manual_torque = -MAX_TORQUE
@@ -191,7 +177,6 @@ def main():
                 ai_torque = ai.action(pend.theta, pend.thetadot)
 
                 if override_active:
-                    # Blend: manual torque dominates, AI still contributes a dampening fraction
                     torque = manual_torque * 0.85 + ai_torque * 0.15
                 else:
                     torque = ai_torque
@@ -201,14 +186,12 @@ def main():
             hist_torque.append(torque)
             hist_energy.append(pend.get_energy())
 
-            # AI diagnostics (always update even during override so charts stay live)
             diag = ai.get_diagnostics()
             hist_free_energy.append(diag["free_energy"])
             hist_pred_err.append(float(np.linalg.norm(diag["eps_s"])))
             hist_belief_err.append(abs(diag["belief_angle"] - pend.theta))
             step += 1
 
-        # ── Geometry ──────────────────────────────────────────────────────
         pivot    = (PIVOT_X, PIVOT_Y)
         tip_x    = PIVOT_X + int(ARM_PX * np.sin(pend.theta))
         tip_y    = PIVOT_Y - int(ARM_PX * np.cos(pend.theta))
@@ -216,13 +199,11 @@ def main():
         ang_frac = min(abs(pend.theta) / (np.pi / 2), 1.0)
         arm_col  = lerp_color(TEAL, PINK, ang_frac)
 
-        # ── Render ────────────────────────────────────────────────────────
         screen.fill(BG)
         draw_grid(screen)
         pygame.draw.line(screen, DIM, (0, TRACK_Y), (W, TRACK_Y), 2)
 
         base_rect = (PIVOT_X - BASE_W//2, PIVOT_Y - BASE_H//2, BASE_W, BASE_H)
-        # Mount colour: orange tint when manually overriding in AI mode
         if mode == "ai" and override_active:
             mount_col = lerp_color(CYAN, ORANGE, 0.7)
         elif mode == "ai":
@@ -242,7 +223,6 @@ def main():
         pygame.draw.circle(screen, WHITE, tip, 6)
 
         if abs(torque) > 0.1:
-            # Arrow colour reflects who is in control
             if mode == "ai" and override_active:
                 arrow_col = ORANGE
             elif mode == "ai":
@@ -258,7 +238,6 @@ def main():
                 (arrow_x, PIVOT_Y + 6),
             ])
 
-        # ── Left HUD ──────────────────────────────────────────────────────
         lh_base = 270 if mode != "ai" else 345
         LX, LY, LW, LH = 20, 20, 230, lh_base
         draw_hud_panel(screen, (LX, LY, LW, LH), PANEL_BG)
@@ -270,7 +249,6 @@ def main():
         mode_label  = mode_labels[mode]
         mode_col    = mode_cols[mode]
 
-        # Show OVERRIDE badge when manually steering in AI mode
         if mode == "ai" and override_active:
             badge_text = "[ MANUAL OVERRIDE ]"
             badge_col  = ORANGE
@@ -301,43 +279,41 @@ def main():
             vs = font_md.render(val, True, col)
             screen.blit(vs, (LX + LW - vs.get_width() - 15, yo))
 
-        # ── Right HUD (sparklines) ─────────────────────────────────────────
         RX, RY = W - 270, 20
         if mode == "ai":
             rh_h = 370
             draw_hud_panel(screen, (RX - 10, RY, 260, rh_h), PANEL_BG)
             draw_sparkline(screen, list(hist_theta),
-                           (RX, RY + 15, 240, 60),
-                           TEAL, -np.pi, np.pi, "Angle theta (rad)", font_sm)
+                        (RX, RY + 15, 240, 60),
+                        TEAL, -np.pi, np.pi, "Angle theta (rad)", font_sm)
             draw_sparkline(screen, list(hist_torque),
-                           (RX, RY + 90, 240, 60),
-                           CYAN, -MAX_TORQUE, MAX_TORQUE, "Torque tau (Nm)", font_sm)
+                        (RX, RY + 90, 240, 60),
+                        CYAN, -MAX_TORQUE, MAX_TORQUE, "Torque tau (Nm)", font_sm)
             max_fe = max(max(hist_free_energy), 1.0)
             draw_sparkline(screen, list(hist_free_energy),
-                           (RX, RY + 165, 240, 60),
-                           PINK, 0, max_fe, "Free Energy F", font_sm)
+                        (RX, RY + 165, 240, 60),
+                        PINK, 0, max_fe, "Free Energy F", font_sm)
             max_pe = max(max(hist_pred_err), 0.1)
             draw_sparkline(screen, list(hist_pred_err),
-                           (RX, RY + 240, 240, 60),
-                           ORANGE, 0, max_pe, "Prediction Error |eps_s|", font_sm)
+                        (RX, RY + 240, 240, 60),
+                        ORANGE, 0, max_pe, "Prediction Error |eps_s|", font_sm)
             max_be = max(max(hist_belief_err), 0.1)
             draw_sparkline(screen, list(hist_belief_err),
-                           (RX, RY + 315, 240, 40),
-                           VIOLET, 0, max_be, "Belief Error |mu-theta|", font_sm)
+                        (RX, RY + 315, 240, 40),
+                        VIOLET, 0, max_be, "Belief Error |mu-theta|", font_sm)
         else:
             draw_hud_panel(screen, (RX - 10, RY, 260, 280), PANEL_BG)
             draw_sparkline(screen, list(hist_theta),
-                           (RX, RY + 15, 240, 70),
-                           TEAL, -np.pi, np.pi, "Angle theta (rad)", font_sm)
+                        (RX, RY + 15, 240, 70),
+                        TEAL, -np.pi, np.pi, "Angle theta (rad)", font_sm)
             draw_sparkline(screen, list(hist_torque),
-                           (RX, RY + 100, 240, 70),
-                           mode_col, -MAX_TORQUE, MAX_TORQUE, "Torque tau (Nm)", font_sm)
+                        (RX, RY + 100, 240, 70),
+                        mode_col, -MAX_TORQUE, MAX_TORQUE, "Torque tau (Nm)", font_sm)
             max_e = max(hist_energy) if max(hist_energy) > 20 else 20
             draw_sparkline(screen, list(hist_energy),
-                           (RX, RY + 185, 240, 70),
-                           PINK, -15, max_e, "Total Energy (J)", font_sm)
+                        (RX, RY + 185, 240, 70),
+                        PINK, -15, max_e, "Total Energy (J)", font_sm)
 
-        # ── Bottom bar ────────────────────────────────────────────────────
         BY = H - 50
         draw_hud_panel(screen, (0, BY, W, 50), PANEL_BG, radius=0)
         if mode == "ai":
