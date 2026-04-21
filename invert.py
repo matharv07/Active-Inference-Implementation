@@ -33,6 +33,7 @@ ORANGE     = (255, 140, 20)
 BLUE_GLOW  = (20, 100, 255)
 VIOLET     = (180, 80, 255)
 CYAN       = (0, 200, 255)
+YELLOW     = (255, 220, 50)
 
 class Pendulum:
     """
@@ -119,6 +120,11 @@ def main():
 
     override_active = False
 
+    input_active = False
+    input_text = "0"
+    input_cursor_blink = 0
+    INPUT_BOX_RECT = pygame.Rect(20, H - 110, 230, 38)
+
     HIST_LEN = 200
     hist_theta = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
     hist_torque = deque([0.0] * HIST_LEN, maxlen=HIST_LEN)
@@ -132,26 +138,53 @@ def main():
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
                 pygame.quit(); sys.exit()
+
+            if ev.type == pygame.MOUSEBUTTONDOWN:
+                if mode == "ai" and INPUT_BOX_RECT.collidepoint(ev.pos):
+                    input_active = True
+                else:
+                    input_active = False
+
             if ev.type == pygame.KEYDOWN:
-                if ev.key == pygame.K_ESCAPE:
-                    pygame.quit(); sys.exit()
-                if ev.key == pygame.K_SPACE:
-                    paused = not paused
-                if ev.key == pygame.K_r:
-                    t0 = np.random.uniform(-0.5, 0.5)
-                    pend = Pendulum(theta0=t0)
-                    ai.reset(theta0=t0)
-                    for h in [hist_theta, hist_torque, hist_energy,
-                            hist_free_energy, hist_pred_err, hist_belief_err]:
-                        h.clear(); h.extend([0.0] * HIST_LEN)
-                    step = 0
-                if ev.key == pygame.K_TAB:
-                    mode_idx = (mode_idx + 1) % len(MODES)
-                    mode = MODES[mode_idx]
-                if ev.key == pygame.K_LEFTBRACKET:
-                    ai.pi_s = np.clip(ai.pi_s - 2.0, 1.0, 50.0)
-                if ev.key == pygame.K_RIGHTBRACKET:
-                    ai.pi_s = np.clip(ai.pi_s + 2.0, 1.0, 50.0)
+                if input_active:
+                    if ev.key == pygame.K_RETURN or ev.key == pygame.K_KP_ENTER:
+                        try:
+                            val = float(input_text)
+                            val = max(-180.0, min(180.0, val))
+                            ai.set_target(val)
+                            input_text = str(int(val)) if val == int(val) else str(val)
+                        except ValueError:
+                            input_text = str(int(ai.get_target_deg()))
+                        input_active = False
+                    elif ev.key == pygame.K_ESCAPE:
+                        input_active = False
+                        input_text = str(int(ai.get_target_deg()))
+                    elif ev.key == pygame.K_BACKSPACE:
+                        input_text = input_text[:-1]
+                    else:
+                        ch = ev.unicode
+                        if ch in "0123456789.-" and len(input_text) < 7:
+                            input_text += ch
+                else:
+                    if ev.key == pygame.K_ESCAPE:
+                        pygame.quit(); sys.exit()
+                    if ev.key == pygame.K_SPACE:
+                        paused = not paused
+                    if ev.key == pygame.K_r:
+                        t0 = np.random.uniform(-0.5, 0.5)
+                        pend = Pendulum(theta0=t0)
+                        ai.reset(theta0=t0)
+                        for h in [hist_theta, hist_torque, hist_energy,
+                                hist_free_energy, hist_pred_err, hist_belief_err]:
+                            h.clear(); h.extend([0.0] * HIST_LEN)
+                        step = 0
+                    if ev.key == pygame.K_TAB:
+                        mode_idx = (mode_idx + 1) % len(MODES)
+                        mode = MODES[mode_idx]
+                    if ev.key == pygame.K_LEFTBRACKET:
+                        ai.pi_s = np.clip(ai.pi_s - 2.0, 1.0, 50.0)
+                    if ev.key == pygame.K_RIGHTBRACKET:
+                        ai.pi_s = np.clip(ai.pi_s + 2.0, 1.0, 50.0)
 
         torque          = 0.0
         override_active = False
@@ -199,6 +232,12 @@ def main():
         ang_frac = min(abs(pend.theta) / (np.pi / 2), 1.0)
         arm_col = lerp_color(TEAL, PINK, ang_frac)
 
+        # Target angle geometry
+        target_rad = ai.eta[0]
+        target_tip_x = PIVOT_X + int(ARM_PX * np.sin(target_rad))
+        target_tip_y = PIVOT_Y - int(ARM_PX * np.cos(target_rad))
+        target_tip = (target_tip_x, target_tip_y)
+
         screen.fill(BG)
         draw_grid(screen)
         pygame.draw.line(screen, DIM, (0, TRACK_Y), (W, TRACK_Y), 2)
@@ -214,8 +253,24 @@ def main():
         draw_hud_panel(screen, base_rect, PANEL_BG, radius=4, alpha=255)
         pygame.draw.rect(screen, mount_col, base_rect, 1, border_radius=4)
 
+        if mode == "ai":
+            num_dashes = 15
+            for i in range(num_dashes):
+                t0 = i / num_dashes
+                t1 = (i + 0.5) / num_dashes
+                p0 = (int(PIVOT_X + (target_tip_x - PIVOT_X) * t0),
+                      int(PIVOT_Y + (target_tip_y - PIVOT_Y) * t0))
+                p1 = (int(PIVOT_X + (target_tip_x - PIVOT_X) * t1),
+                      int(PIVOT_Y + (target_tip_y - PIVOT_Y) * t1))
+                pygame.draw.line(screen, (*YELLOW, 90), p0, p1, 2)
+            glow_circle(screen, YELLOW, target_tip, 8, layers=3)
+
         ghost_tip = (PIVOT_X, PIVOT_Y - ARM_PX)
-        pygame.draw.line(screen, (*TEAL, 50), pivot, ghost_tip, 2)
+        if abs(target_rad) > 0.01:  
+            pygame.draw.line(screen, (*TEAL, 30), pivot, ghost_tip, 1)
+        else:
+            pygame.draw.line(screen, (*TEAL, 50), pivot, ghost_tip, 2)
+
         pygame.draw.line(screen, arm_col, pivot, tip, 6)
         pygame.draw.circle(screen, WHITE, pivot, 8)
         pygame.draw.circle(screen, BG,    pivot, 4)
@@ -234,7 +289,7 @@ def main():
             pygame.draw.line(screen, arrow_col, (PIVOT_X, PIVOT_Y), (arrow_x, PIVOT_Y), 4)
             pygame.draw.polygon(screen, arrow_col, [(arrow_x + arrow_dir * 8, PIVOT_Y), (arrow_x, PIVOT_Y - 6), (arrow_x, PIVOT_Y + 6)])
 
-        lh_base = 270 if mode != "ai" else 345
+        lh_base = 270 if mode != "ai" else 380
         LX, LY, LW, LH = 20, 20, 230, lh_base
         draw_hud_panel(screen, (LX, LY, LW, LH), PANEL_BG)
         screen.blit(font_lg.render("SYS.TELEMETRY", True, TEAL), (LX + 15, LY + 15))
@@ -264,7 +319,11 @@ def main():
         ]
         if mode == "ai":
             d = ai.get_diagnostics()
-            stats += [("FREE ENRGY", f"{d['free_energy']:+7.2f}", CYAN), ("Πₛ (sens)",  f"{d['pi_s'][0]:7.1f}", CYAN)]
+            stats += [
+                ("TARGET (η)", f"{ai.get_target_deg():+7.1f}°", YELLOW),
+                ("FREE ENRGY", f"{d['free_energy']:+7.2f}", CYAN),
+                ("Πₛ (sens)",  f"{d['pi_s'][0]:7.1f}", CYAN),
+            ]
 
         for i, (lbl, val, col) in enumerate(stats):
             yo = LY + 75 + i * 36
@@ -291,10 +350,31 @@ def main():
             max_e = max(hist_energy) if max(hist_energy) > 20 else 20
             draw_sparkline(screen, list(hist_energy), (RX, RY + 185, 240, 70), PINK, -15, max_e, "Total Energy (J)", font_sm)
 
+        if mode == "ai":
+            input_cursor_blink += 1
+            ib = INPUT_BOX_RECT
+            border_col = YELLOW if input_active else DIM
+            draw_hud_panel(screen, (ib.x, ib.y, ib.w, ib.h), PANEL_BG, radius=6, alpha=240)
+            pygame.draw.rect(screen, border_col, ib, 2, border_radius=6)
+
+            label_surf = font_sm.render("TARGET ANGLE (°)", True, YELLOW)
+            screen.blit(label_surf, (ib.x + 8, ib.y - 16))
+
+            # Render typed text
+            display_text = input_text
+            if input_active and (input_cursor_blink // 30) % 2 == 0:
+                display_text += "_"
+            txt_surf = font_md.render(display_text, True, WHITE)
+            screen.blit(txt_surf, (ib.x + 12, ib.y + 10))
+
+            # Range hint
+            hint = font_sm.render("-180 to 180", True, DIM)
+            screen.blit(hint, (ib.x + ib.w - hint.get_width() - 8, ib.y + 14))
+
         BY = H - 50
         draw_hud_panel(screen, (0, BY, W, 50), PANEL_BG, radius=0)
         if mode == "ai":
-            controls = "[←/→] Override AI  [TAB] Mode  [SPACE] Pause  [R] Reset  [/] Pi_s  [ESC] Exit"
+            controls = "[←/→] Override  [TAB] Mode  [SPACE] Pause  [R] Reset  [/] Pi_s  [ESC] Exit"
         else:
             controls = "[←/→] Torque  [TAB] Mode  [SPACE] Pause  [R] Reset  [ESC] Exit"
         cs = font_md.render(controls, True, DIM)
