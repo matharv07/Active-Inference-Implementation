@@ -8,7 +8,7 @@ _MAX_TAU = 15.0
 
 
 def _wrap_angle(a):
-    """Wrap angle difference to [-π, π] for shortest-path errors."""
+    """Wrap angle difference to [-π, π]"""
     return (a + np.pi) % (2 * np.pi) - np.pi
 
 
@@ -82,7 +82,6 @@ class ActiveInferenceController:
          "eps_m": self._eps_m.copy(), "free_energy": self._F, "torque": self._torque, "pi_s": self.pi_s.copy(), "pi_p": self.pi_p.copy(), "pi_m": np.zeros(2) }
 
     def set_target(self, angle_deg: float):
-        """Set the target angle in degrees (−180 to 180). 0° = upright."""
         angle_deg = float(np.clip(angle_deg, -180.0, 180.0))
         self.eta[0] = np.radians(angle_deg)
 
