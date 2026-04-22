@@ -8,7 +8,6 @@ _MAX_TAU = 15.0
 
 
 def _wrap_angle(a):
-    """Wrap angle difference to [-π, π]"""
     return (a + np.pi) % (2 * np.pi) - np.pi
 
 
